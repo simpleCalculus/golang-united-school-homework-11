@@ -24,25 +24,24 @@ func getBatch(n int64, pool int64) (res []user) {
 	}
 
 	var wg sync.WaitGroup
-	var mx sync.Mutex
+	users := make(chan user, n)
+	ch := make(chan struct{}, pool)
 
-	for i := int64(0); i < pool; i++ {
+	for i := int64(0); i < n; i++ {
 		wg.Add(1)
+		ch <- struct{}{}
 		go func(j int64) {
-			for {
-				mx.Lock()
-				size := len(res)
-				if size == int(n) {
-					mx.Unlock()
-					break
-				}
-				res = append(res, getOne(int64(size)))
-				mx.Unlock()
-			}
-			wg.Done()
+			defer wg.Done()
+			users <- getOne(j)
+			<-ch
 		}(i)
 	}
 	wg.Wait()
+
+	close(users)
+	for user := range users {
+		res = append(res, user)
+	}
 
 	return
 }
